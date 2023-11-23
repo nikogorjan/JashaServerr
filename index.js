@@ -7,6 +7,12 @@ const { resolve } = require("path");
 // Replace if using a different env file or config
 const env = require("dotenv").config({ path: "./.env" });
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+const nodemailer = require("nodemailer");
+const fs = require('fs');
+const PDFDocument = require('pdfkit');
+const pdfmake = require('pdfmake');
+const table = require('pdfkit-table');
+const PDFDocumentWithTables = require('./PDFDocumentWithTables');
 
 const connection = mysql.createConnection({
   host: 'jashabrewingdb.cyvabfqcztv5.eu-central-1.rds.amazonaws.com',
@@ -28,6 +34,30 @@ connection.connect((err) => {
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
+
+const sendEmail = async (to, subject, text) => {
+  const transporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+      user: process.env.EMAIL_USERNAME, // Your Gmail username
+      pass: process.env.EMAIL_PASSWORD, // Your Gmail password or an app-specific password
+    },
+  });
+
+  const mailOptions = {
+    from: process.env.EMAIL_USERNAME,
+    to,
+    subject,
+    text,
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log("Email sent successfully");
+  } catch (error) {
+    console.error("Error sending email:", error);
+  }
+};
 
 
 /////////////////////////////////////////////////// GET ////////////////////////////////////////////////////////////////////////////////
@@ -202,6 +232,9 @@ app.post("/create-payment-intent", async (req, res) => {
     res.send({
       clientSecret: paymentIntent.client_secret,
     });
+
+
+
   } catch (e) {
     return res.status(400).send({
       error: {
@@ -211,6 +244,87 @@ app.post("/create-payment-intent", async (req, res) => {
   }
 });
 
+app.post('/send-email', async (req, res) => {
+  try {
+    const { to, subject, text, cartData } = req.body;
+
+    // Generate a PDF file with cartData
+    const pdfPath = `${__dirname}/cartData.pdf`;
+    const pdfDoc = new PDFDocumentWithTables();
+    pdfDoc.font('./PTSerifProCaptRg.OTF');
+    // Pipe the PDF to a file
+    const stream = fs.createWriteStream(pdfPath);
+    pdfDoc.pipe(stream);
+
+    // Create a table
+    pdfDoc.text(`Nov nakup - ${new Date().toLocaleString()}`);
+    pdfDoc.moveDown();
+    pdfDoc.moveDown();
+
+    const table = {
+      headers: ['Ime',"Pakiranje", 'Količina', 'Cena'],
+      rows: cartData.cartItems.map(item => [item.ime,item.cena.name.toString(), item.quantity.toString(), item.cena.price.toString() + '€']),
+    };
+
+    pdfDoc.table(table, { width: 500 });
+    pdfDoc.moveDown();
+
+
+    pdfDoc.text(`Cena dostave: ${(cartData.shippingCost / 100).toFixed(2)}€`, { align: 'right', continued: true });
+    pdfDoc.moveDown();
+
+    const fullPrice = cartData.cartItems.reduce((total, item) => {
+      return total + item.quantity * item.cena.price;
+    }, 0) + cartData.shippingCost / 100;
+
+    pdfDoc.text(`Cena paketa: ${fullPrice.toFixed(2)}€`, { align: 'right', continued: false });
+    pdfDoc.moveDown();
+    pdfDoc.moveDown();
+
+    pdfDoc.text(`Način plačila: ${cartData.placiloOption}`, { align: 'left' });
+    pdfDoc.text(`Telefon: ${cartData.customerPhone}`, { align: 'left' });
+    pdfDoc.text(`Ime: ${cartData.customerName}`, { align: 'left' });
+    pdfDoc.text(`Priimek: ${cartData.customerSurname}`, { align: 'left' });
+    pdfDoc.text(`Ulica in hišna številka: ${cartData.customerUlica}`, { align: 'left' });
+    pdfDoc.text(`Poštna številka: ${cartData.customerPost}`, { align: 'left' });
+    pdfDoc.text(`Mesto: ${cartData.customerCity}`, { align: 'left' });
+    pdfDoc.text(`E-naslo: ${cartData.customerEmail}`, { align: 'left' });
+
+
+    pdfDoc.end();
+
+    // Logic to send email with attachment
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: 'niko.gorjan@gmail.com',
+        pass: 'sgek ixli tqei uato',
+      },
+    });
+
+    const mailOptions = {
+      from: 'niko.gorjan@gmail.com',
+      to,
+      subject,
+      text,
+      encoding: 'utf8',
+      attachments: [
+        {
+          filename: 'cartData.pdf',
+          path: pdfPath,
+        },
+      ],
+    };
+
+    await transporter.sendMail(mailOptions);
+
+    console.log('Email sent successfully');
+    res.status(200).send('Email sent successfully');
+  } catch (error) {
+    console.error('Error sending email:', error);
+    res.status(500).send('Internal Server Error');
+  }
+});
 
 
 app.listen(port, () => {
