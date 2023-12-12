@@ -37,7 +37,9 @@ app.use(express.json({ limit: '50mb' }));
 
 const sendEmail = async (to, subject, text) => {
   const transporter = nodemailer.createTransport({
-    service: "gmail",
+    host: 'jashabrewing.com',
+    port: 465,
+    secure: true,
     auth: {
       user: process.env.EMAIL_USERNAME, // Your Gmail username
       pass: process.env.EMAIL_PASSWORD, // Your Gmail password or an app-specific password
@@ -107,6 +109,90 @@ app.get('/ItemsData', (req, res) => {
 app.get('/ShippingData', (req, res) => {
   // Perform database query
   connection.query('SELECT * FROM Shipping', (queryError, results) => {
+    if (queryError) {
+      console.error('Error executing query:', queryError);
+      res.status(500).send('Internal Server Error');
+      return;
+    }
+
+    // Send the query results as JSON
+    res.json(results);
+  });
+});
+
+app.get('/CustomerData', (req, res) => {
+  // Perform database query
+  connection.query('SELECT * FROM Customers', (queryError, results) => {
+    if (queryError) {
+      console.error('Error executing query:', queryError);
+      res.status(500).send('Internal Server Error');
+      return;
+    }
+
+    // Send the query results as JSON
+    res.json(results);
+  });
+});
+
+app.get('/PhoneData', (req, res) => {
+  // Perform database query
+  connection.query('SELECT * FROM Phone', (queryError, results) => {
+    if (queryError) {
+      console.error('Error executing query:', queryError);
+      res.status(500).send('Internal Server Error');
+      return;
+    }
+
+    // Send the query results as JSON
+    res.json(results);
+  });
+});
+
+app.get('/PubData', (req, res) => {
+  // Perform database query
+  connection.query('SELECT * FROM PubImages', (queryError, results) => {
+    if (queryError) {
+      console.error('Error executing query:', queryError);
+      res.status(500).send('Internal Server Error');
+      return;
+    }
+
+    // Send the query results as JSON
+    res.json(results);
+  });
+});
+
+app.get('/BreweryData', (req, res) => {
+  // Perform database query
+  connection.query('SELECT * FROM BreweryImages', (queryError, results) => {
+    if (queryError) {
+      console.error('Error executing query:', queryError);
+      res.status(500).send('Internal Server Error');
+      return;
+    }
+
+    // Send the query results as JSON
+    res.json(results);
+  });
+});
+
+app.get('/LockData', (req, res) => {
+  // Perform database query
+  connection.query('SELECT * FROM LockData', (queryError, results) => {
+    if (queryError) {
+      console.error('Error executing query:', queryError);
+      res.status(500).send('Internal Server Error');
+      return;
+    }
+
+    // Send the query results as JSON
+    res.json(results);
+  });
+});
+
+app.get('/shippingTresholdData', (req, res) => {
+  // Perform database query
+  connection.query('SELECT * FROM ShippingTreshold', (queryError, results) => {
     if (queryError) {
       console.error('Error executing query:', queryError);
       res.status(500).send('Internal Server Error');
@@ -194,15 +280,18 @@ app.post('/SaveItemsData', async (req, res) => {
         popust,
         slika,
         category,
-        cena
+        cena,
+        navoljo,
+        enote,
+        enoteSkupaj
       } = item;
 
-      const insertItemQuery = 'INSERT INTO Items (ime, podnaslov, opisslo, opiseng, popust, slika, category, cena) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
+      const insertItemQuery = 'INSERT INTO Items (ime, podnaslov, opisslo, opiseng, popust, slika, category, cena,navoljo,enote,enoteSkupaj) VALUES (?, ?, ?, ?, ?, ?, ?, ?,?,?,?)';
 
       // Convert Buffer data to Buffer
       const slikaBuffer = Buffer.from(slika.data);
 
-      connection.query(insertItemQuery, [ime, podnaslov, opisslo, opiseng, popust, slikaBuffer, category, cena], (queryError, results) => {
+      connection.query(insertItemQuery, [ime, podnaslov, opisslo, opiseng, popust, slikaBuffer, category, cena,navoljo,enote,enoteSkupaj], (queryError, results) => {
         if (queryError) {
           console.error('Error inserting item into the database:', queryError);
         } else {
@@ -295,15 +384,17 @@ app.post('/send-email', async (req, res) => {
 
     // Logic to send email with attachment
     const transporter = nodemailer.createTransport({
-      service: 'gmail',
+      host: 'jashabrewing.com',
+      port: 465,
+      secure: true,
       auth: {
-        user: 'niko.gorjan@gmail.com',
-        pass: 'sgek ixli tqei uato',
+        user: process.env.EMAIL_USERNAME,
+        pass: process.env.EMAIL_PASSWORD,
       },
     });
 
     const mailOptions = {
-      from: 'niko.gorjan@gmail.com',
+      from: process.env.EMAIL_USERNAME,
       to,
       subject,
       text,
@@ -322,6 +413,236 @@ app.post('/send-email', async (req, res) => {
     res.status(200).send('Email sent successfully');
   } catch (error) {
     console.error('Error sending email:', error);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
+app.post('/update-customer', async (req, res) => {
+  try {
+    const { email, name, surname, phone, price } = req.body;
+
+    // Check if the customer already exists
+    const customerExistsQuery = 'SELECT * FROM Customers WHERE email = ?';
+    connection.query(customerExistsQuery, [email], async (queryError, results) => {
+      if (queryError) {
+        console.error('Error checking if customer exists:', queryError);
+        res.status(500).send('Internal Server Error');
+        return;
+      }
+
+      if (results.length > 0) {
+        // Customer exists, update spending
+        const updateCustomerQuery = 'UPDATE Customers SET spending = spending + ? WHERE email = ?';
+        connection.query(updateCustomerQuery, [price, email], (updateError) => {
+          if (updateError) {
+            console.error('Error updating customer spending:', updateError);
+            res.status(500).send('Internal Server Error');
+          } else {
+            res.status(200).send('Customer data updated successfully');
+          }
+        });
+      } else {
+        // Customer doesn't exist, insert a new row
+        const insertCustomerQuery = 'INSERT INTO Customers (name, surname, email, phone, spending) VALUES (?, ?, ?, ?, ?)';
+        connection.query(insertCustomerQuery, [name, surname, email, phone, price], (insertError) => {
+          if (insertError) {
+            console.error('Error inserting new customer:', insertError);
+            res.status(500).send('Internal Server Error');
+          } else {
+            res.status(200).send('New customer added successfully');
+          }
+        });
+      }
+    });
+  } catch (error) {
+    console.error('Error updating customer data:', error);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
+app.post('/UpdateShippingValue', (req, res) => {
+  const { idDostava, value } = req.body;
+
+  // Update the Shipping table where idDosta is the specified ID
+  const updateShippingValueQuery = 'UPDATE Shipping SET value = ? WHERE idDostava = ?';
+
+  connection.query(updateShippingValueQuery, [value, idDostava], (queryError, results) => {
+    if (queryError) {
+      console.error('Error updating shipping value:', queryError);
+      res.status(500).send('Internal Server Error');
+    } else {
+      res.status(200).send('Shipping value updated successfully');
+    }
+  });
+});
+
+app.post('/UpdateShippingTresholdValue', (req, res) => {
+  const { idShippingTreshold, treshold } = req.body;
+
+  // Update the Shipping table where idDosta is the specified ID
+  const updateShippingValueQuery = 'UPDATE ShippingTreshold SET treshold = ? WHERE idShippingTreshold = ?';
+
+  connection.query(updateShippingValueQuery, [treshold, idShippingTreshold], (queryError, results) => {
+    if (queryError) {
+      console.error('Error updating shipping value:', queryError);
+      res.status(500).send('Internal Server Error');
+    } else {
+      res.status(200).send('Shipping value updated successfully');
+    }
+  });
+});
+
+app.post('/UpdatePhoneValue', async (req, res) => {
+  try {
+    const { idTelefon, mobile, phone } = req.body;
+
+    // Update the Phone table where idTelefon is 1
+    const updatePhoneQuery = 'UPDATE Phone SET mobile = ?, phone = ? WHERE idTelefon = ?';
+    connection.query(updatePhoneQuery, [mobile, phone, idTelefon], (updateError) => {
+      if (updateError) {
+        console.error('Error updating phone values:', updateError);
+        res.status(500).send('Internal Server Error');
+      } else {
+        res.status(200).send('Phone values updated successfully');
+      }
+    });
+  } catch (error) {
+    console.error('Error updating phone values:', error);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
+app.post('/UpdatePubImagesValues', async (req, res) => {
+  try {
+      const { idPubPhotos, images } = req.body;
+
+      const pubImagesData = images[0];
+
+      const slikaBuffer1 = pubImagesData.image1 ? Buffer.from(pubImagesData.image1.data) : null;
+      const slikaBuffer2 = pubImagesData.image2 ? Buffer.from(pubImagesData.image2.data) : null;
+      const slikaBuffer3 = pubImagesData.image3 ? Buffer.from(pubImagesData.image3.data) : null;
+
+      const updatePubImagesQuery = 'UPDATE PubImages SET image1 = ?, image2 = ?, image3 = ? WHERE idPubPhotos = ?';
+
+      // Execute the query
+      connection.query(updatePubImagesQuery, [slikaBuffer1, slikaBuffer2, slikaBuffer3, idPubPhotos], (queryError) => {
+          if (queryError) {
+              console.error('Error updating PubImages:', queryError);
+              res.status(500).send('Internal Server Error');
+          } else {
+              res.status(200).send('PubImages data updated successfully');
+          }
+      });
+  } catch (error) {
+      console.error('Error updating PubImages data:', error);
+      res.status(500).send('Internal Server Error');
+  }
+});
+
+app.post('/UpdateBreweryImagesValues', async (req, res) => {
+  try {
+      const { idBreweryImages, images } = req.body;
+
+      const pubImagesData = images[0];
+
+      const slikaBuffer1 = pubImagesData.image1 ? Buffer.from(pubImagesData.image1.data) : null;
+      const slikaBuffer2 = pubImagesData.image2 ? Buffer.from(pubImagesData.image2.data) : null;
+      const slikaBuffer3 = pubImagesData.image3 ? Buffer.from(pubImagesData.image3.data) : null;
+
+      const updatePubImagesQuery = 'UPDATE BreweryImages SET image1 = ?, image2 = ?, image3 = ? WHERE idBreweryImages = ?';
+
+      // Execute the query
+      connection.query(updatePubImagesQuery, [slikaBuffer1, slikaBuffer2, slikaBuffer3, idBreweryImages], (queryError) => {
+          if (queryError) {
+              console.error('Error updating PubImages:', queryError);
+              res.status(500).send('Internal Server Error');
+          } else {
+              res.status(200).send('PubImages data updated successfully');
+          }
+      });
+  } catch (error) {
+      console.error('Error updating PubImages data:', error);
+      res.status(500).send('Internal Server Error');
+  }
+});
+
+app.post('/UpdateLockValues', (req, res) => {
+  try {
+    const { idLock, locked } = req.body;
+
+    // Perform an update query based on the locked value
+    const updateLockQuery = 'UPDATE LockData SET locked = ? WHERE idLock = ?';
+    connection.query(updateLockQuery, [locked ? 1 : 0, idLock], (updateError) => {
+      if (updateError) {
+        console.error('Error updating LockData:', updateError);
+        res.status(500).send('Internal Server Error');
+      } else {
+        res.status(200).send('Lock status updated successfully');
+      }
+    });
+  } catch (error) {
+    console.error('Error updating LockData:', error);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
+app.post('/update-items-enote', async (req, res) => {
+  const itemsDatabase = req.body.itemsDatabase;
+
+  try {
+    // Loop through itemsDatabase and update records in the database
+    for (const item of itemsDatabase) {
+      const updateQuery = 'UPDATE Items SET cena = ?, enote = ? WHERE ime = ?';
+      const values = [item.cena, item.enote, item.ime];
+
+      await executeQuery(updateQuery, values);
+    }
+
+    res.status(200).send('Items enote updated successfully');
+  } catch (error) {
+    console.error('Error updating items enote:', error);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
+const executeQuery = (query, values) => {
+  return new Promise((resolve, reject) => {
+    connection.query(query, values, (err, results) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(results);
+      }
+    });
+  });
+};
+
+app.post('/check-and-send-email', async (req, res) => {
+  try {
+    const { itemsDatabase } = req.body;
+
+    // Find items with enote less than "50"
+    const itemsToAlert = itemsDatabase.filter(item => parseFloat(item.enote) < 50 && item.enoteSkupaj === 1 && item.navoljo === 1);
+
+    // If there are items to alert, send an email
+    if (itemsToAlert.length > 0) {
+      const subject = 'OPOZORILO';
+      let text = 'Izdelek z manj kot 50 enot:\n';
+
+      // Append item details to the email text
+      itemsToAlert.forEach(item => {
+        text += `Ime: ${item.ime}, Enote: ${item.enote}\n`;
+      });
+
+      // Send email
+      await sendEmail(process.env.EMAIL_USERNAME, subject, text);
+
+      console.log('Alert email sent successfully');
+    }
+
+    res.status(200).send('Emails sent successfully');
+  } catch (error) {
+    console.error('Error checking and sending emails:', error);
     res.status(500).send('Internal Server Error');
   }
 });
